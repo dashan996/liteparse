@@ -24,19 +24,32 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libreoffice imagemagick ghostscript tesseract-ocr
+          sudo apt-get install -y libclang-dev libtesseract-dev libleptonica-dev \
+            tesseract-ocr libreoffice imagemagick ghostscript
 
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cache/pdfium-rs
+            target
+          key: ${{ runner.os }}-cargo-e2e-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --release
+
+      # The comparison scripts (compare-dataset.ts, upload-dataset.ts) still use
+      # Node/tsx and need to be ported to Rust or rewritten as shell scripts.
+      # For now, we install Node to run them.
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: "npm"
 
-      - name: Install dependencies
+      - name: Install Node dependencies
         run: npm ci
-
-      - name: Build
-        run: npm run build
 
       - name: Download from HuggingFace
         env:
@@ -107,7 +120,20 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libreoffice imagemagick ghostscript tesseract-ocr
+          sudo apt-get install -y libclang-dev libtesseract-dev libleptonica-dev \
+            tesseract-ocr libreoffice imagemagick ghostscript
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cache/pdfium-rs
+            target
+          key: ${{ runner.os }}-cargo-e2e-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --release
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -124,9 +150,6 @@ jobs:
         run: |
           npm ci
           pip install huggingface_hub
-
-      - name: Build
-        run: npm run build
 
       - name: Download existing dataset from HuggingFace
         env:
