@@ -47,9 +47,9 @@ struct ParseCommand {
     #[arg(long)]
     page_num: Option<u32>,
 
-    /// Enable OCR for text-sparse pages and embedded images
+    /// Disable OCR (by default, OCR runs on text-sparse pages and embedded images)
     #[arg(long)]
-    ocr: bool,
+    no_ocr: bool,
 
     /// OCR language (Tesseract format, e.g. "eng", "fra", "deu")
     #[arg(long, default_value = "eng")]
@@ -110,7 +110,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut pages = extract::extract_pages(&cmd.pdf_path, cmd.page_num)?;
             let t1 = std::time::Instant::now();
 
-            if cmd.ocr {
+            if !cmd.no_ocr {
                 let engine = TesseractOcrEngine::new(cmd.tessdata_path);
                 ocr_merge::ocr_and_merge_pages(
                     &mut pages,
