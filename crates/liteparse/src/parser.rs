@@ -1,6 +1,8 @@
 use crate::config::{LiteParseConfig, OutputFormat, parse_target_pages};
 use crate::conversion;
 use crate::extract;
+use crate::ocr::OcrEngine;
+use crate::ocr::http_simple::HttpOcrEngine;
 use crate::ocr::tesseract::TesseractOcrEngine;
 use crate::ocr_merge;
 use crate::output::{json, text};
@@ -69,7 +71,13 @@ impl LiteParse {
 
         // OCR pass
         if self.config.ocr_enabled {
-            let engine = TesseractOcrEngine::new(self.config.tessdata_path.clone());
+            let engine: Box<dyn OcrEngine> = if self.config.ocr_server_url.is_none() {
+                Box::new(TesseractOcrEngine::new(self.config.tessdata_path.clone()))
+            } else {
+                Box::new(HttpOcrEngine::new(
+                    self.config.ocr_server_url.clone().unwrap(),
+                ))
+            };
             ocr_merge::ocr_and_merge_pages(
                 &mut pages,
                 &pdf_path,

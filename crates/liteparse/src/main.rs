@@ -51,6 +51,10 @@ struct ParseCommand {
     #[arg(long, default_value = "eng")]
     ocr_language: String,
 
+    /// HTTP OCR server URL (uses Tesseract if not provided)
+    #[arg(long, default_value = None)]
+    ocr_server_url: Option<String>,
+
     /// Path to tessdata directory (overrides TESSDATA_PREFIX env var)
     #[arg(long)]
     tessdata_path: Option<String>,
@@ -126,6 +130,10 @@ struct BatchParseCommand {
     #[arg(long, default_value = "eng")]
     ocr_language: String,
 
+    /// HTTP OCR server URL (uses Tesseract if not provided)
+    #[arg(long, default_value = None)]
+    ocr_server_url: Option<String>,
+
     /// Path to tessdata directory (overrides TESSDATA_PREFIX env var)
     #[arg(long)]
     tessdata_path: Option<String>,
@@ -193,6 +201,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 preserve_very_small_text: cmd.preserve_small_text,
                 password: cmd.password,
                 quiet: cmd.quiet,
+                ocr_server_url: cmd.ocr_server_url,
             };
 
             let lp = LiteParse::new(config);
@@ -269,6 +278,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 preserve_very_small_text: false,
                 password: cmd.password,
                 quiet: cmd.quiet,
+                ocr_server_url: cmd.ocr_server_url,
             };
 
             let lp = LiteParse::new(config);
