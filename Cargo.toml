@@ -5,6 +5,7 @@ members = [
     "crates/pdfium",
     "crates/liteparse",
     "crates/liteparse-napi",
+    "crates/liteparse-python",
 ]
 
 [workspace.package]

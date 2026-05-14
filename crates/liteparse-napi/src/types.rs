@@ -182,11 +182,7 @@ pub struct JsScreenshotResult {
 impl JsParseResult {
     pub fn from_rust(result: &ParseResult, _config: &LiteParseConfig) -> Self {
         Self {
-            pages: result
-                .pages
-                .iter()
-                .map(JsParsedPage::from_rust)
-                .collect(),
+            pages: result.pages.iter().map(JsParsedPage::from_rust).collect(),
             text: result.text.clone(),
         }
     }

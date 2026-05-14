@@ -37,8 +37,8 @@ impl LiteParse {
         let pdf_input = if conversion::is_pdf(input) {
             PdfInput::Path(input.to_string())
         } else {
-            let converted = conversion::convert_to_pdf(input, self.config.password.as_deref())
-                .await?;
+            let converted =
+                conversion::convert_to_pdf(input, self.config.password.as_deref()).await?;
             PdfInput::Path(converted.pdf_path)
         };
 
@@ -49,7 +49,10 @@ impl LiteParse {
     ///
     /// Use `PdfInput::Path` for files on disk or `PdfInput::Bytes` for
     /// in-memory PDF data (e.g. from a network response or Node.js Buffer).
-    pub async fn parse_input(&self, input: PdfInput) -> Result<ParseResult, Box<dyn std::error::Error>> {
+    pub async fn parse_input(
+        &self,
+        input: PdfInput,
+    ) -> Result<ParseResult, Box<dyn std::error::Error>> {
         let log = |msg: &str| {
             if !self.config.quiet {
                 eprintln!("{}", msg);

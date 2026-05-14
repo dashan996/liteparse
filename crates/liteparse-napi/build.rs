@@ -25,9 +25,9 @@ fn main() {
 
     // Also add the build-time pdfium path so local dev builds work without
     // copying libpdfium manually.
-    if let Ok(lib_path) = env::var("DEP_PDFIUM_LIB_PATH") {
-        if target_os == "macos" || target_os == "linux" {
-            println!("cargo:rustc-link-arg=-Wl,-rpath,{lib_path}");
-        }
+    if let Ok(lib_path) = env::var("DEP_PDFIUM_LIB_PATH")
+        && (target_os == "macos" || target_os == "linux")
+    {
+        println!("cargo:rustc-link-arg=-Wl,-rpath,{lib_path}");
     }
 }
