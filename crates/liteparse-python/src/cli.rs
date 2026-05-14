@@ -177,7 +177,10 @@ pub fn run_cli(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
                 let output_path = format!("{}/page_{}.png", cmd.output_dir, page_number);
                 render::screenshot(&cmd.file, page_number, cmd.dpi, &output_path)?;
                 if !cmd.quiet {
-                    eprintln!("[liteparse] screenshot page {} → {}", page_number, output_path);
+                    eprintln!(
+                        "[liteparse] screenshot page {} → {}",
+                        page_number, output_path
+                    );
                 }
             }
         }
@@ -186,7 +189,11 @@ pub fn run_cli(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
             let format = parse_output_format(&cmd.format)?;
             let ext_filter = cmd.extension.as_ref().map(|e| {
                 let e = e.to_lowercase();
-                if e.starts_with('.') { e } else { format!(".{}", e) }
+                if e.starts_with('.') {
+                    e
+                } else {
+                    format!(".{}", e)
+                }
             });
 
             let config = LiteParseConfig {
@@ -204,7 +211,11 @@ pub fn run_cli(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
             };
 
             let lp = LiteParse::new(config);
-            let out_ext = if format == OutputFormat::Json { "json" } else { "txt" };
+            let out_ext = if format == OutputFormat::Json {
+                "json"
+            } else {
+                "txt"
+            };
 
             std::fs::create_dir_all(&cmd.output_dir)?;
             let files = collect_files(&cmd.input_dir, cmd.recursive, ext_filter.as_deref())?;
@@ -238,16 +249,30 @@ pub fn run_cli(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
                             success += 1;
                             if !cmd.quiet {
                                 let elapsed = t0.elapsed().as_secs_f64() * 1000.0;
-                                eprintln!("[liteparse] {} → {} ({:.1}ms)", file_path, out_path.display(), elapsed);
+                                eprintln!(
+                                    "[liteparse] {} → {} ({:.1}ms)",
+                                    file_path,
+                                    out_path.display(),
+                                    elapsed
+                                );
                             }
                         }
-                        Err(e) => { eprintln!("[liteparse] error formatting {}: {}", file_path, e); errors += 1; }
+                        Err(e) => {
+                            eprintln!("[liteparse] error formatting {}: {}", file_path, e);
+                            errors += 1;
+                        }
                     },
-                    Err(e) => { eprintln!("[liteparse] error parsing {}: {}", file_path, e); errors += 1; }
+                    Err(e) => {
+                        eprintln!("[liteparse] error parsing {}: {}", file_path, e);
+                        errors += 1;
+                    }
                 }
             }
 
-            eprintln!("[liteparse] batch complete: {} succeeded, {} failed", success, errors);
+            eprintln!(
+                "[liteparse] batch complete: {} succeeded, {} failed",
+                success, errors
+            );
             if errors > 0 {
                 std::process::exit(1);
             }

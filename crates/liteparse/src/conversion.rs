@@ -226,7 +226,7 @@ pub async fn is_path_executable(file_path: &str) -> bool {
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
-                return meta.permissions().mode() & 0o111 != 0;
+                meta.permissions().mode() & 0o111 != 0
             }
 
             #[cfg(windows)]

@@ -2,7 +2,8 @@ use std::env;
 
 fn main() {
     // Get the pdfium lib path from the pdfium-sys link metadata
-    let lib_path = env::var("DEP_PDFIUM_LIB_PATH").expect("DEP_PDFIUM_LIB_PATH not set (from pdfium-sys)");
+    let lib_path =
+        env::var("DEP_PDFIUM_LIB_PATH").expect("DEP_PDFIUM_LIB_PATH not set (from pdfium-sys)");
 
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
 

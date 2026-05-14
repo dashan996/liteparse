@@ -117,7 +117,11 @@ impl PyParseResult {
     }
 
     fn __repr__(&self) -> String {
-        format!("ParseResult(pages={}, text_len={})", self.pages.len(), self.text.len())
+        format!(
+            "ParseResult(pages={}, text_len={})",
+            self.pages.len(),
+            self.text.len()
+        )
     }
 }
 
@@ -334,12 +338,12 @@ impl LiteParse {
                     "page {page_num} out of range (document has {page_count} pages)"
                 )));
             }
-            let page = document.page((page_num - 1) as i32).map_err(|e| {
-                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
-            })?;
-            let bitmap = page.render(dpi).map_err(|e| {
-                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
-            })?;
+            let page = document
+                .page((page_num - 1) as i32)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            let bitmap = page
+                .render(dpi)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
             let width = bitmap.width() as u32;
             let height = bitmap.height() as u32;
@@ -390,8 +394,7 @@ impl LiteParse {
 /// Run the `lit` CLI with the given arguments.
 #[pyfunction]
 fn run_cli(args: Vec<String>) -> PyResult<()> {
-    cli::run_cli(args)
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    cli::run_cli(args).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
 #[pymodule]
