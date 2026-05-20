@@ -174,9 +174,7 @@ fn extract_page_text_items(
     let skip_invisible = should_skip_invisible(text_page, char_count);
 
     if debug {
-        eprintln!(
-            "[extract-debug] char_count={char_count}, skip_invisible={skip_invisible}"
-        );
+        eprintln!("[extract-debug] char_count={char_count}, skip_invisible={skip_invisible}");
     }
 
     let page_rotation = page.rotation();
@@ -202,7 +200,9 @@ fn extract_page_text_items(
         if skip_invisible && ch.text_render_mode() == Some(3) {
             if debug {
                 let c_display = char::from_u32(unicode).unwrap_or('?');
-                eprintln!("[extract-debug] i={i} SKIP invisible char='{c_display}' unicode=0x{unicode:04X}");
+                eprintln!(
+                    "[extract-debug] i={i} SKIP invisible char='{c_display}' unicode=0x{unicode:04X}"
+                );
             }
             continue;
         }
@@ -244,7 +244,9 @@ fn extract_page_text_items(
         // Skip non-space generated characters (synthetic glyphs)
         if is_generated {
             if debug {
-                eprintln!("[extract-debug] i={i} SKIP generated char='{c}' unicode=0x{unicode:04X}");
+                eprintln!(
+                    "[extract-debug] i={i} SKIP generated char='{c}' unicode=0x{unicode:04X}"
+                );
             }
             continue;
         }
@@ -263,7 +265,11 @@ fn extract_page_text_items(
             if debug {
                 eprintln!(
                     "[extract-debug] i={i} SKIP zero-height char='{c}' height={:.2} vp=({:.1},{:.1})-({:.1},{:.1})",
-                    vp_loose.bottom - vp_loose.top, vp_loose.left, vp_loose.top, vp_loose.right, vp_loose.bottom
+                    vp_loose.bottom - vp_loose.top,
+                    vp_loose.left,
+                    vp_loose.top,
+                    vp_loose.right,
+                    vp_loose.bottom
                 );
             }
             continue;
@@ -429,7 +435,9 @@ fn dedup_overlapping_items(items: &mut Vec<TextItem>, debug: bool) {
                     if debug {
                         eprintln!(
                             "[extract-debug] DEDUP skip (area ratio {:.1}x) i={i} text='{}' j={j} text='{}'",
-                            larger_area / smaller_area, items[i].text, items[j].text
+                            larger_area / smaller_area,
+                            items[i].text,
+                            items[j].text
                         );
                     }
                     continue;
@@ -437,8 +445,16 @@ fn dedup_overlapping_items(items: &mut Vec<TextItem>, debug: bool) {
                 if debug {
                     eprintln!(
                         "[extract-debug] DEDUP overlap drop i={i} text='{}' at ({:.1},{:.1} {}x{}) in favor of j={j} text='{}' at ({:.1},{:.1} {}x{}) overlap_ratio={:.2}",
-                        items[i].text, items[i].x, items[i].y, items[i].width, items[i].height,
-                        items[j].text, items[j].x, items[j].y, items[j].width, items[j].height,
+                        items[i].text,
+                        items[i].x,
+                        items[i].y,
+                        items[i].width,
+                        items[i].height,
+                        items[j].text,
+                        items[j].x,
+                        items[j].y,
+                        items[j].width,
+                        items[j].height,
                         intersection / smaller_area
                     );
                 }
