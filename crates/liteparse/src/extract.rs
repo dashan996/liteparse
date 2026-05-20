@@ -579,12 +579,19 @@ impl SegmentBuilder {
         }
     }
 
-    /// Average width of non-space characters in the current segment (viewport space).
+    /// Average width of non-space characters in the current segment.
+    /// Prefers actual glyph widths (text_width) over bbox width, since bbox
+    /// includes inter-character gaps that inflate the average and cause
+    /// separate table cell values to merge into one item.
     fn avg_char_width(&self) -> f32 {
         if self.char_count == 0 {
             return 5.0;
         }
-        (self.vp_right - self.vp_left) / self.char_count as f32
+        if self.text_width > 0.0 {
+            self.text_width / self.char_count as f32
+        } else {
+            (self.vp_right - self.vp_left) / self.char_count as f32
+        }
     }
 
     /// Start a new segment with the given character.
