@@ -384,7 +384,7 @@ fn search_items(items: Vec<PyTextItem>, phrase: String, case_sensitive: bool) ->
         case_sensitive,
     };
     liteparse::search::search_items(&rust_items, &options)
-        .iter()
+        .into_iter()
         .map(PyTextItem::from_rust)
         .collect()
 }
