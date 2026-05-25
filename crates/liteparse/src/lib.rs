@@ -7,7 +7,7 @@
 // ── Public API re-exports ──────────────────────────────────────────────
 pub use config::{LiteParseConfig, OutputFormat};
 pub use error::LiteParseError;
-pub use parser::{LiteParse, ParseResult};
+pub use parser::{LiteParse, ParseResult, ScreenshotResult};
 pub use search::{SearchOptions, search_items};
 pub use types::{ParsedPage, TextItem};
 

@@ -20,6 +20,9 @@ const IMAGE_EXTENSIONS: &[&str] = &[
     "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp", "svg",
 ];
 
+/// Plain-text extensions that cannot be rendered as page images.
+const TEXT_ONLY_EXTENSIONS: &[&str] = &["txt", "md", "markdown", "log"];
+
 /// Extensions that require Ghostscript for ImageMagick conversion.
 const GHOSTSCRIPT_REQUIRED_EXTENSIONS: &[&str] = &["svg", "eps", "ps", "ai"];
 
@@ -61,6 +64,67 @@ pub fn is_pdf(path: &str) -> bool {
 }
 
 /// Check if a file extension is supported (either PDF or convertible).
+/// Returns true when the extension denotes a plain-text format with no page layout.
+pub fn is_text_only_extension(ext: &str) -> bool {
+    TEXT_ONLY_EXTENSIONS.contains(&ext.to_lowercase().as_str())
+}
+
+pub fn screenshot_text_format_error(ext: &str) -> LiteParseError {
+    LiteParseError::Conversion(format!(
+        "Cannot screenshot text-based format (.{ext}). Convert to PDF first."
+    ))
+}
+
+/// Keeps converted PDF temp directories alive until rendering or parsing completes.
+/// All temp dirs are cleaned up automatically when this guard is dropped.
+#[derive(Debug)]
+pub struct PdfInputGuard {
+    #[allow(dead_code)]
+    temps: Vec<TempDir>,
+}
+
+/// Resolve a document input to a PDF suitable for rendering or text extraction.
+///
+/// When `reject_text_formats` is true, plain-text files (`.txt`, etc.) return a
+/// clear error instead of attempting conversion.
+pub async fn resolve_pdf_input(
+    input: crate::types::PdfInput,
+    password: Option<&str>,
+    reject_text_formats: bool,
+) -> Result<(crate::types::PdfInput, PdfInputGuard), LiteParseError> {
+    use crate::types::PdfInput;
+
+    match input {
+        PdfInput::Path(p) => {
+            let ext = Path::new(&p)
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("");
+            if reject_text_formats && is_text_only_extension(ext) {
+                return Err(screenshot_text_format_error(ext));
+            }
+            if is_pdf(&p) {
+                Ok((PdfInput::Path(p), PdfInputGuard { temps: Vec::new() }))
+            } else {
+                let (converted, tmp_dir) = convert_to_pdf(&p, password).await?;
+                let temps = tmp_dir.into_iter().collect();
+                Ok((PdfInput::Path(converted.pdf_path), PdfInputGuard { temps }))
+            }
+        }
+        PdfInput::Bytes(b) => {
+            let ext = guess_extension_from_data(&b);
+            if ext.as_deref() == Some("pdf") {
+                return Ok((PdfInput::Bytes(b), PdfInputGuard { temps: Vec::new() }));
+            }
+            if reject_text_formats && ext.as_ref().is_some_and(|e| is_text_only_extension(e)) {
+                return Err(screenshot_text_format_error(ext.as_ref().unwrap()));
+            }
+            let (converted, temps) = convert_data_to_pdf(b, password).await?;
+            Ok((PdfInput::Path(converted.pdf_path), PdfInputGuard { temps }))
+        }
+    }
+}
+
 pub fn is_supported_extension(path: &str) -> bool {
     let ext = match Path::new(path).extension().and_then(|e| e.to_str()) {
         Some(e) => e.to_lowercase(),
@@ -608,6 +672,38 @@ mod tests {
     #[tokio::test]
     async fn test_is_path_executable_nonexistent() {
         assert!(!is_path_executable("/no/such/path/zzz").await);
+    }
+
+    #[test]
+    fn test_is_text_only_extension() {
+        assert!(is_text_only_extension("txt"));
+        assert!(is_text_only_extension("TXT"));
+        assert!(is_text_only_extension("md"));
+        assert!(!is_text_only_extension("pdf"));
+        assert!(!is_text_only_extension("docx"));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_pdf_input_rejects_text_for_screenshot() {
+        use crate::types::PdfInput;
+
+        let err = resolve_pdf_input(PdfInput::Path("/tmp/readme.txt".into()), None, true)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("Cannot screenshot text-based format"));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_pdf_input_pdf_bytes_zero_disk() {
+        use crate::types::PdfInput;
+
+        let pdf_bytes = b"%PDF-1.4\n";
+        let (input, guard) = resolve_pdf_input(PdfInput::Bytes(pdf_bytes.to_vec()), None, true)
+            .await
+            .unwrap();
+        assert!(matches!(input, PdfInput::Bytes(_)));
+        assert!(guard.temps.is_empty());
     }
 
     #[tokio::test]

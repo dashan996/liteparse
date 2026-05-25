@@ -1,7 +1,72 @@
 use crate::error::LiteParseError;
-use image::{ImageBuffer, Rgba};
-use pdfium::Library;
+use crate::extract::load_document_from_input;
+use crate::types::PdfInput;
+use image::ImageEncoder;
 use serde::Serialize;
+
+/// A single rendered page as PNG bytes.
+#[derive(Debug, Clone)]
+pub struct RenderedPage {
+    pub page_num: u32,
+    pub width: u32,
+    pub height: u32,
+    pub png_bytes: Vec<u8>,
+}
+
+/// Render selected pages from a PDF input to PNG bytes.
+pub fn render_pages_to_png(
+    input: &PdfInput,
+    page_numbers: Option<&[u32]>,
+    dpi: f32,
+    password: Option<&str>,
+) -> Result<Vec<RenderedPage>, LiteParseError> {
+    let document = load_document_from_input(input, password)?;
+    render_document_pages(&document, page_numbers, dpi)
+}
+
+fn render_document_pages(
+    document: &pdfium::Document,
+    page_numbers: Option<&[u32]>,
+    dpi: f32,
+) -> Result<Vec<RenderedPage>, LiteParseError> {
+    let page_count = document.page_count() as u32;
+    let pages: Vec<u32> = match page_numbers {
+        Some(nums) => nums.to_vec(),
+        None => (1..=page_count).collect(),
+    };
+
+    let mut results = Vec::with_capacity(pages.len());
+    for page_num in pages {
+        if page_num < 1 || page_num > page_count {
+            return Err(LiteParseError::Other(format!(
+                "page {page_num} out of range (document has {page_count} pages)"
+            )));
+        }
+
+        let page = document.page((page_num - 1) as i32)?;
+        let bitmap = page.render(dpi)?;
+        let width = bitmap.width() as u32;
+        let height = bitmap.height() as u32;
+        let rgba = bitmap.to_rgba();
+        let png_bytes = encode_png(&rgba, width, height)?;
+
+        results.push(RenderedPage {
+            page_num,
+            width,
+            height,
+            png_bytes,
+        });
+    }
+
+    Ok(results)
+}
+
+fn encode_png(rgba: &[u8], width: u32, height: u32) -> Result<Vec<u8>, LiteParseError> {
+    let mut png_buf = Vec::new();
+    let encoder = image::codecs::png::PngEncoder::new(&mut png_buf);
+    encoder.write_image(rgba, width, height, image::ColorType::Rgba8.into())?;
+    Ok(png_buf)
+}
 
 /// Render a single page to a PNG file.
 pub fn screenshot(
@@ -9,44 +74,40 @@ pub fn screenshot(
     page_num: u32,
     dpi: f32,
     output_path: &str,
+    password: Option<&str>,
 ) -> Result<(), LiteParseError> {
-    let lib = Library::init();
-    let document = lib.load_document(pdf_path, None)?;
-    let page = document.page((page_num - 1) as i32)?;
-    let bitmap = page.render(dpi)?;
+    let input = PdfInput::Path(pdf_path.to_string());
+    let pages = render_pages_to_png(&input, Some(&[page_num]), dpi, password)?;
+    let page = pages
+        .into_iter()
+        .next()
+        .ok_or_else(|| LiteParseError::Other("no page rendered".into()))?;
 
-    let width = bitmap.width() as u32;
-    let height = bitmap.height() as u32;
-    let rgba = bitmap.to_rgba();
+    std::fs::write(output_path, &page.png_bytes)?;
 
-    let img: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::from_raw(width, height, rgba).ok_or(
-        LiteParseError::Other("failed to create image buffer".into()),
-    )?;
-
-    img.save(output_path)?;
     eprintln!(
-        "[rust-bin] rendered page {} at {dpi} DPI → {output_path} ({width}×{height})",
-        page_num
+        "[rust-bin] rendered page {} at {dpi} DPI → {output_path} ({}×{})",
+        page_num, page.width, page.height
     );
 
     Ok(())
 }
 
 /// Render a single page and write raw PNG bytes to stdout.
-pub fn screenshot_to_stdout(pdf_path: &str, page_num: u32, dpi: f32) -> Result<(), LiteParseError> {
-    let lib = Library::init();
-    let document = lib.load_document(pdf_path, None)?;
-    let page = document.page((page_num - 1) as i32)?;
-    let bitmap = page.render(dpi)?;
+pub fn screenshot_to_stdout(
+    pdf_path: &str,
+    page_num: u32,
+    dpi: f32,
+    password: Option<&str>,
+) -> Result<(), LiteParseError> {
+    let input = PdfInput::Path(pdf_path.to_string());
+    let pages = render_pages_to_png(&input, Some(&[page_num]), dpi, password)?;
+    let page = pages
+        .into_iter()
+        .next()
+        .ok_or_else(|| LiteParseError::Other("no page rendered".into()))?;
 
-    let width = bitmap.width() as u32;
-    let height = bitmap.height() as u32;
-    let rgba = bitmap.to_rgba();
-
-    let encoder = image::codecs::png::PngEncoder::new(std::io::stdout().lock());
-    use image::ImageEncoder;
-    encoder.write_image(&rgba, width, height, image::ColorType::Rgba8.into())?;
-
+    std::io::Write::write_all(&mut std::io::stdout().lock(), &page.png_bytes)?;
     Ok(())
 }
 
@@ -60,8 +121,7 @@ struct ImageBoundsOutput {
 
 /// Extract image bounding boxes and print as JSON to stdout.
 pub fn image_bounds(pdf_path: &str, page_num: Option<u32>) -> Result<(), LiteParseError> {
-    let lib = Library::init();
-    let document = lib.load_document(pdf_path, None)?;
+    let document = load_document_from_input(&PdfInput::Path(pdf_path.to_string()), None)?;
     let page_count = document.page_count();
 
     for page_index in 0..page_count {
@@ -118,6 +178,7 @@ mod tests {
             1,
             72.0,
             "/tmp/out.png",
+            None,
         );
         assert!(r.is_err());
     }

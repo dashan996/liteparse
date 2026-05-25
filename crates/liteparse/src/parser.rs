@@ -1,8 +1,6 @@
 use crate::config::{LiteParseConfig, parse_target_pages};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::conversion;
-#[cfg(not(target_arch = "wasm32"))]
-use crate::conversion::convert_data_to_pdf;
 use crate::error::LiteParseError;
 use crate::extract;
 use crate::ocr::OcrEngine;
@@ -12,6 +10,8 @@ use crate::ocr::http_simple::HttpOcrEngine;
 use crate::ocr::tesseract::TesseractOcrEngine;
 use crate::ocr_merge;
 use crate::projection;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::render;
 use crate::types::{ParsedPage, PdfInput};
 
 /// Result of parsing a document.
@@ -20,6 +20,15 @@ pub struct ParseResult {
     pub pages: Vec<ParsedPage>,
     /// Full document text, concatenated from all pages.
     pub text: String,
+}
+
+/// Result of rendering a single page screenshot.
+#[derive(Debug, Clone)]
+pub struct ScreenshotResult {
+    pub page_num: u32,
+    pub width: u32,
+    pub height: u32,
+    pub image_bytes: Vec<u8>,
 }
 
 /// Main LiteParse orchestrator.
@@ -73,38 +82,11 @@ impl LiteParse {
         let t0 = web_time::Instant::now();
 
         #[cfg(not(target_arch = "wasm32"))]
-        let mut _buffer_temps: Vec<tempfile::TempDir> = Vec::new();
-        #[cfg(not(target_arch = "wasm32"))]
-        let mut _conv_tmp_dir: Option<tempfile::TempDir> = None;
+        let (validated_input, _guard) =
+            conversion::resolve_pdf_input(input, self.config.password.as_deref(), false).await?;
 
-        let validated_input = {
-            #[cfg(target_arch = "wasm32")]
-            {
-                input
-            }
-
-            #[cfg(not(target_arch = "wasm32"))]
-            match input {
-                PdfInput::Path(p) => {
-                    if conversion::is_pdf(&p) {
-                        PdfInput::Path(p)
-                    } else {
-                        let (converted, tmp_dir) =
-                            conversion::convert_to_pdf(&p, self.config.password.as_deref()).await?;
-                        _conv_tmp_dir = tmp_dir;
-                        // The on-disk source isn't ours to delete; only the
-                        // converted temp file should be cleaned up by `tmp_dir`.
-                        PdfInput::Path(converted.pdf_path)
-                    }
-                }
-                PdfInput::Bytes(b) => {
-                    let (converted, temps) =
-                        convert_data_to_pdf(b, self.config.password.as_deref()).await?;
-                    _buffer_temps = temps;
-                    PdfInput::Path(converted.pdf_path)
-                }
-            }
-        };
+        #[cfg(target_arch = "wasm32")]
+        let validated_input = input;
 
         // Determine which pages to extract
         let target_pages = self
@@ -224,6 +206,61 @@ impl LiteParse {
             pages: parsed_pages,
             text: full_text,
         })
+    }
+
+    /// Generate screenshots of document pages as PNG bytes.
+    ///
+    /// Non-PDF files are automatically converted to PDF first (requires
+    /// LibreOffice/ImageMagick on the system). Plain-text formats cannot be
+    /// rendered and return a clear error.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn screenshot(
+        &self,
+        input: &str,
+        page_numbers: Option<Vec<u32>>,
+    ) -> Result<Vec<ScreenshotResult>, LiteParseError> {
+        self.screenshot_input(PdfInput::Path(input.to_string()), page_numbers)
+            .await
+    }
+
+    /// Generate screenshots from a file path or raw bytes.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn screenshot_input(
+        &self,
+        input: PdfInput,
+        page_numbers: Option<Vec<u32>>,
+    ) -> Result<Vec<ScreenshotResult>, LiteParseError> {
+        let log = |msg: &str| {
+            if !self.config.quiet {
+                eprintln!("{}", msg);
+            }
+        };
+
+        let (validated_input, _guard) =
+            conversion::resolve_pdf_input(input, self.config.password.as_deref(), true).await?;
+
+        if let PdfInput::Path(ref path) = validated_input
+            && !conversion::is_pdf(path)
+        {
+            log("[liteparse] converted input to PDF for screenshot rendering");
+        }
+
+        let rendered = render::render_pages_to_png(
+            &validated_input,
+            page_numbers.as_deref(),
+            self.config.dpi,
+            self.config.password.as_deref(),
+        )?;
+
+        Ok(rendered
+            .into_iter()
+            .map(|page| ScreenshotResult {
+                page_num: page.page_num,
+                width: page.width,
+                height: page.height,
+                image_bytes: page.png_bytes,
+            })
+            .collect())
     }
 
     pub fn config(&self) -> &LiteParseConfig {
