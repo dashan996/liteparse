@@ -291,6 +291,82 @@ fn dylib_name() -> &'static str {
     }
 }
 
+/// Get the directory containing the current shared library (the .pyd/.so/.node/.dll
+/// that this code is compiled into). This lets us find sibling files like pdfium.dll
+/// that are bundled next to the native extension in Python wheels, Node packages, etc.
+fn self_dir() -> Option<PathBuf> {
+    // Use a static function in this module as the probe address.
+    let addr = self_dir as *const ();
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::ffi::OsString;
+        use std::os::windows::ffi::OsStringExt;
+
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn GetModuleHandleExW(
+                dwFlags: u32,
+                lpModuleName: *const u8,
+                phModule: *mut *mut std::ffi::c_void,
+            ) -> i32;
+            fn GetModuleFileNameW(
+                hModule: *mut std::ffi::c_void,
+                lpFilename: *mut u16,
+                nSize: u32,
+            ) -> u32;
+        }
+
+        const FROM_ADDRESS: u32 = 0x00000004;
+        const UNCHANGED_REFCOUNT: u32 = 0x00000002;
+
+        unsafe {
+            let mut module = std::ptr::null_mut();
+            if GetModuleHandleExW(
+                FROM_ADDRESS | UNCHANGED_REFCOUNT,
+                addr as *const u8,
+                &mut module,
+            ) == 0
+            {
+                return None;
+            }
+            let mut buf = vec![0u16; 1024];
+            let len = GetModuleFileNameW(module, buf.as_mut_ptr(), buf.len() as u32);
+            if len == 0 || len >= buf.len() as u32 {
+                return None;
+            }
+            let path = PathBuf::from(OsString::from_wide(&buf[..len as usize]));
+            path.parent().map(|p| p.to_path_buf())
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        #[repr(C)]
+        struct DlInfo {
+            dli_fname: *const std::os::raw::c_char,
+            dli_fbase: *mut std::ffi::c_void,
+            dli_sname: *const std::os::raw::c_char,
+            dli_saddr: *mut std::ffi::c_void,
+        }
+
+        unsafe extern "C" {
+            fn dladdr(addr: *const std::ffi::c_void, info: *mut DlInfo) -> i32;
+        }
+
+        unsafe {
+            let mut info: DlInfo = std::mem::zeroed();
+            if dladdr(addr as *const std::ffi::c_void, &mut info) != 0 && !info.dli_fname.is_null()
+            {
+                let cstr = std::ffi::CStr::from_ptr(info.dli_fname);
+                let path = PathBuf::from(cstr.to_string_lossy().as_ref());
+                return path.parent().map(|p| p.to_path_buf());
+            }
+            None
+        }
+    }
+}
+
 /// Search paths for the pdfium shared library, in priority order.
 fn search_paths() -> Vec<PathBuf> {
     let mut paths = Vec::new();
@@ -313,14 +389,20 @@ fn search_paths() -> Vec<PathBuf> {
         }
     }
 
-    // 3. Next to the current executable
+    // 3. Next to the native extension (Python .pyd/.so, Node .node, etc.)
+    //    Uses dladdr (Unix) / GetModuleHandleExW (Windows) to find our own module path.
+    if let Some(dir) = self_dir() {
+        paths.push(dir.join(name));
+    }
+
+    // 4. Next to the current executable
     if let Ok(exe) = std::env::current_exe() {
         if let Some(exe_dir) = exe.parent() {
             paths.push(exe_dir.join(name));
         }
     }
 
-    // 4. Bare library name (system search paths / LD_LIBRARY_PATH / DYLD_LIBRARY_PATH / PATH)
+    // 5. Bare library name (system search paths / LD_LIBRARY_PATH / DYLD_LIBRARY_PATH / PATH)
     paths.push(PathBuf::from(name));
 
     paths
